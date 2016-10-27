@@ -1,0 +1,10 @@
+---
+- paths:
+    - "*.log"
+    - "x/*.log"
+  rotate: 3
+  mode: 0640
+  user: chaofei
+  group: staff
+  dateformat: "-%Y%m%d%H%M%S"
+  sharedscripts: no
