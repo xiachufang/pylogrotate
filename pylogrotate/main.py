@@ -18,21 +18,20 @@ DEFAULT_CONFIG = {
     'group': 'root',
     'dateformat': '-%Y%m%d',
     'sharedscripts': True,
-    'destext': 'rotates',
+    'destext': 'rotates/%Y%m/%d',
     'prerotate': [],
     'postrotate': [],
 }
 CONFIG_TEMPLATE = '''---
 - paths:
     - "*.log"
-    - "x/*.log"
   rotate: 7
   mode: 0640
   user: nobody
   group: nobody
   dateformat: "-%Y%m%d%H%M%S"
   sharedscripts: yes
-  destext: rotates
+  destext: "rotates/%Y%m/%d"
   prerotate:
     - echo prerotate2
   postrotate:
@@ -96,7 +95,8 @@ class Rotator(object):
         self.postrotates = config['postrotate']
 
     def get_rotated_dir(self, path):
-        dest_dir = '{}-{}'.format(path, self.destext)
+        destext = self.now.strftime(self.destext)
+        dest_dir = '{}-{}'.format(path, destext)
         return dest_dir
 
     def get_rotated_time(self, path):
