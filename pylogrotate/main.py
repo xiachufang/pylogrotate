@@ -18,25 +18,25 @@ DEFAULT_CONFIG = {
     'group': 'root',
     'dateformat': '-%Y%m%d',
     'sharedscripts': True,
+    'destext': 'rotates',
     'prerotate': [],
     'postrotate': [],
 }
 CONFIG_TEMPLATE = '''---
 - paths:
-  - "*.log"
-  - "x/*.log"
-rotate: 7
-mode: 0640
-user: root
-group: root
-dateformat: "-%Y%m%d%H%M%S"
-sharedscripts: yes
-prerotate:
-  - echo prerotate1
-  - echo prerotate2
-postroute:
-  - echo postrotate
-  - echo postrotate2
+    - "*.log"
+    - "x/*.log"
+  rotate: 7
+  mode: 0640
+  user: nobody
+  group: nobody
+  dateformat: "-%Y%m%d%H%M%S"
+  sharedscripts: yes
+  destext: rotates
+  prerotate:
+    - echo prerotate2
+  postrotate:
+    - invoke-rc.d nginx rotate >/dev/null 2>&1 || true
 '''
 
 
@@ -71,6 +71,15 @@ def iterate_log_paths(globs):
             yield f
 
 
+def run(cmd):
+    pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    pipe.wait()
+    if pipe.returncode != 0:
+        print pipe.stdout.read()
+        print >> sys.stderr, pipe.stderr.read()
+        sys.exit(pipe.returncode)
+
+
 class Rotator(object):
     def __init__(self, config):
         self.config = config
@@ -82,8 +91,13 @@ class Rotator(object):
         self.user = config['user']
         self.group = config['group']
         self.sharedscripts = config['sharedscripts']
+        self.destext = config['destext']
         self.prerotates = config['prerotate']
         self.postrotates = config['postrotate']
+
+    def get_rotated_dir(self, path):
+        dest_dir = '{}-{}'.format(path, self.destext)
+        return dest_dir
 
     def get_rotated_time(self, path):
         dateext = path.rsplit('-', 1)[-1]
@@ -95,12 +109,35 @@ class Rotator(object):
         except:
             return False
 
-    def remove_old_files(self, file_path):
-        glob_path = '{}-[0-9]*'.format(file_path)
+    def get_dest_path(self, path):
+        rotated_dir = self.get_rotated_dir(path)
+        filename = os.path.split(path)[-1]
+        dest_path = os.path.join(rotated_dir, '{}{}'.format(filename, self.dateext))
+        return dest_path
+
+    def remove_old_files(self, path):
+        glob_path = '{}-[0-9]*'.format(path)
         files = [f for f in glob.glob(glob_path) if self.is_rotated_file(f)]
         files.sort(key=self.get_rotated_time, reverse=True)
         for f in files[self.keep_files:]:
             os.remove(f)
+
+    def create_rotated_dir(self, path):
+        rotated_dir = self.get_rotated_dir(path)
+        try:
+            os.makedirs(rotated_dir, 0755)
+        except OSError as e:
+            if e.errno != 17:
+                raise
+        chown(rotated_dir, self.user, self.group)
+
+    def rotate_file(self, path):
+        self.create_rotated_dir(path)
+        dest_path = self.get_dest_path(path)
+        shutil.move(path, dest_path)
+        os.chmod(dest_path, self.mode)
+        chown(dest_path, self.user, self.group)
+        self.remove_old_files(dest_path)
 
     def rotate(self):
         if self.sharedscripts:
@@ -109,11 +146,8 @@ class Rotator(object):
         for f in iterate_log_paths(self.config['paths']):
             if not self.sharedscripts:
                 self.prerotate()
-            dest_path = '{}{}'.format(f, self.dateext)
-            shutil.move(f, dest_path)
-            os.chmod(dest_path, self.mode)
-            chown(dest_path, self.user, self.group)
-            self.remove_old_files(f)
+
+            self.rotate_file(f)
 
             if not self.sharedscripts:
                 self.postrotate()
@@ -123,15 +157,11 @@ class Rotator(object):
 
     def prerotate(self):
         for cmd in self.prerotates:
-            retcode = subprocess.call(cmd, shell=True)
-            if retcode != 0:
-                sys.exit(retcode)
+            run(cmd)
 
     def postrotate(self):
         for cmd in self.postrotates:
-            retcode = subprocess.call(cmd, shell=True)
-            if retcode != 0:
-                sys.exit(retcode)
+            run(cmd)
 
 
 def main():
