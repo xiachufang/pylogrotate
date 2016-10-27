@@ -1,0 +1,2 @@
+# pylogrotate
+logrotate in minutes
