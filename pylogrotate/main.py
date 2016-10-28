@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
     'group': 'root',
     'dateformat': '-%Y%m%d',
     'sharedscripts': True,
+    'compress': True,
     'destext': 'rotates/%Y%m/%d',
     'prerotate': [],
     'postrotate': [],
@@ -29,6 +30,7 @@ CONFIG_TEMPLATE = '''---
   mode: 0640
   user: nobody
   group: nobody
+  compress: yes
   dateformat: "-%Y%m%d%H%M%S"
   sharedscripts: yes
   destext: "rotates/%Y%m/%d"
@@ -79,6 +81,14 @@ def run(cmd):
         sys.exit(pipe.returncode)
 
 
+def gzip(path):
+    if isinstance(path, list):
+        path = ' '.join(path)
+    if not path:
+        return
+    run('gzip {}'.format(path))
+
+
 class Rotator(object):
     def __init__(self, config):
         self.config = config
@@ -87,6 +97,7 @@ class Rotator(object):
         self.now = datetime.datetime.now()
         self.dateext = self.now.strftime(self.dateformat)
         self.mode = config['mode']
+        self.compress = config['compress']
         self.user = config['user']
         self.group = config['group']
         self.sharedscripts = config['sharedscripts']
@@ -101,11 +112,14 @@ class Rotator(object):
 
     def get_rotated_time(self, path):
         dateext = path.rsplit('-', 1)[-1]
+        # remove gz ext
+        dateext = dateext.split('.')[0]
         return datetime.datetime.strptime('-{}'.format(dateext), self.dateformat)
 
     def is_rotated_file(self, path):
         try:
-            return bool(self.get_rotated_time(path))
+            t = self.get_rotated_time(path)
+            return bool(t)
         except:
             return False
 
@@ -116,7 +130,10 @@ class Rotator(object):
         return dest_path
 
     def remove_old_files(self, path):
-        glob_path = '{}-[0-9]*'.format(path)
+        rotated_dir = self.get_rotated_dir(path)
+        filename = os.path.split(path)[-1]
+        path = os.path.join(rotated_dir, filename)
+        glob_path = '{}-*'.format(path)
         files = [f for f in glob.glob(glob_path) if self.is_rotated_file(f)]
         files.sort(key=self.get_rotated_time, reverse=True)
         for f in files[self.keep_files:]:
@@ -137,23 +154,32 @@ class Rotator(object):
         shutil.move(path, dest_path)
         os.chmod(dest_path, self.mode)
         chown(dest_path, self.user, self.group)
-        self.remove_old_files(dest_path)
+        self.remove_old_files(path)
+        return dest_path
+
+    def compress_files(self, paths):
+        gzip(paths)
 
     def rotate(self):
         if self.sharedscripts:
             self.prerotate()
 
+        new_paths = []
         for f in iterate_log_paths(self.config['paths']):
             if not self.sharedscripts:
                 self.prerotate()
 
-            self.rotate_file(f)
+            new_path = self.rotate_file(f)
+            new_paths.append(new_path)
 
             if not self.sharedscripts:
                 self.postrotate()
 
         if self.sharedscripts:
             self.postrotate()
+
+        if self.compress:
+            self.compress_files(new_paths)
 
     def prerotate(self):
         for cmd in self.prerotates:
