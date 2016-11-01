@@ -16,6 +16,7 @@ DEFAULT_CONFIG = {
     'mode': 0644,
     'user': 'root',
     'group': 'root',
+    'copy': {},
     'dateformat': '-%Y%m%d',
     'sharedscripts': True,
     'compress': True,
@@ -25,12 +26,15 @@ DEFAULT_CONFIG = {
 }
 CONFIG_TEMPLATE = '''---
 - paths:
-    - "*.log"
+    - "/var/log/nginx/*.log"
   rotate: 7
   mode: 0640
   user: nobody
   group: nobody
   compress: yes
+  copy:
+    from: /var/log/nginx
+    to: /mfs/log/nginx
   dateformat: "-%Y%m%d%H%M%S"
   sharedscripts: yes
   destext: "rotates/%Y%m/%d"
@@ -45,6 +49,14 @@ def chown(path, user, group):
     uid = pwd.getpwnam(user).pw_uid
     gid = grp.getgrnam(group).gr_gid
     os.chown(path, uid, gid)
+
+
+def makedirs(path, mode):
+    try:
+        os.makedirs(path, mode)
+    except OSError as e:
+        if e.errno != 17:
+            raise
 
 
 def parse_config(path):
@@ -69,7 +81,7 @@ def generate_default_config():
 def iterate_log_paths(globs):
     for g in globs:
         for f in glob.iglob(g):
-            yield f
+            yield os.path.abspath(f)
 
 
 def run(cmd):
@@ -102,6 +114,7 @@ class Rotator(object):
         self.group = config['group']
         self.sharedscripts = config['sharedscripts']
         self.destext = config['destext']
+        self.copy = config['copy']
         self.prerotates = config['prerotate']
         self.postrotates = config['postrotate']
 
@@ -141,11 +154,7 @@ class Rotator(object):
 
     def create_rotated_dir(self, path):
         rotated_dir = self.get_rotated_dir(path)
-        try:
-            os.makedirs(rotated_dir, 0755)
-        except OSError as e:
-            if e.errno != 17:
-                raise
+        makedirs(rotated_dir, 0755)
         chown(rotated_dir, self.user, self.group)
 
     def rotate_file(self, path):
@@ -159,6 +168,21 @@ class Rotator(object):
 
     def compress_files(self, paths):
         gzip(paths)
+        return ['{}.gz'.format(p) for p in paths]
+
+    def copy_files(self, paths):
+        to = self.copy.get('to')
+        from_ = self.copy.get('from', '')
+        if not to:
+            return
+        for path in paths:
+            dest = os.path.normpath(path.replace(from_, to))
+            dest_dir = os.path.dirname(dest)
+            if not os.path.exists(dest_dir):
+                makedirs(dest_dir, 0755)
+                chown(dest_dir, self.user, self.group)
+            if path.startswith(from_):
+                shutil.copy(path, dest)
 
     def rotate(self):
         if self.sharedscripts:
@@ -179,7 +203,10 @@ class Rotator(object):
             self.postrotate()
 
         if self.compress:
-            self.compress_files(new_paths)
+            paths = self.compress_files(new_paths)
+
+        if self.copy:
+            self.copy_files(paths)
 
     def prerotate(self):
         for cmd in self.prerotates:
