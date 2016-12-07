@@ -16,7 +16,7 @@ DEFAULT_CONFIG = {
     'mode': 0644,
     'user': 'root',
     'group': 'root',
-    'copy': {},
+    'copy': [],
     'dateformat': '-%Y%m%d',
     'sharedscripts': True,
     'compress': True,
@@ -33,8 +33,8 @@ CONFIG_TEMPLATE = '''---
   group: nobody
   compress: yes
   copy:
-    from: /var/log/nginx
-    to: /mfs/log/nginx
+    - from: /var/log/nginx
+      to: /mfs/log/nginx
   dateformat: "-%Y%m%d%H%M%S"
   sharedscripts: yes
   destext: "rotates/%Y%m/%d"
@@ -170,9 +170,7 @@ class Rotator(object):
         gzip(paths)
         return ['{}.gz'.format(p) for p in paths]
 
-    def copy_files(self, paths):
-        to = self.copy.get('to')
-        from_ = self.copy.get('from', '')
+    def _copy_files(self, paths, from_, to):
         if not to:
             return
         for path in paths:
@@ -183,6 +181,17 @@ class Rotator(object):
                 chown(dest_dir, self.user, self.group)
             if path.startswith(from_):
                 shutil.copy(path, dest)
+
+    def copy_files(self, paths):
+        if isinstance(self.copy, dict):
+            to = self.copy.get('to')
+            from_ = self.copy.get('from', '')
+            self._copy_files(paths, from_, to)
+        else:
+            for item in self.copy:
+                to = item.get('to')
+                from_ = item.get('from', '')
+                self._copy_files(paths, from_, to)
 
     def rotate(self):
         if self.sharedscripts:
