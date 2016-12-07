@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pylogrotate',
-    version='0.0.5',
+    version='0.0.6',
     description='Logrotate in python',
     author='gfreezy',
     author_email='gfreezy@gmail.com',
@@ -17,7 +17,7 @@ setup(
         'Natural Language :: Chinese (Simplified)',
         'Programming Language :: Python :: 2.7',
     ],
-    entry_points = {
+    entry_points={
         'console_scripts': ['pylogrotate=pylogrotate.main:main'],
     },
     keywords='logrotate',
