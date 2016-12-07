@@ -48,7 +48,10 @@ CONFIG_TEMPLATE = '''---
 def chown(path, user, group):
     uid = pwd.getpwnam(user).pw_uid
     gid = grp.getgrnam(group).gr_gid
-    os.chown(path, uid, gid)
+    try:
+        os.chown(path, uid, gid)
+    except:
+        pass
 
 
 def makedirs(path, mode):
