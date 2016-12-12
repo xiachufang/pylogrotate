@@ -1,17 +1,17 @@
-import glob
-import os
-import sys
+import argparse
 import datetime
-import yaml
+import glob
+import grp
+import os
+import pwd
 import shutil
 import subprocess
-import pwd
-import grp
-import argparse
-import hdfs
-from pqueue import Queue
+import sys
 from Queue import Empty
 
+import hdfs
+import yaml
+from pqueue import Queue
 
 DEFAULT_CONFIG = {
     'paths': [],
@@ -220,7 +220,7 @@ class Rotator(object):
             return
         dest = os.path.normpath(path.replace(from_, to))
         if path.startswith(from_):
-            client.upload(dest, from_, overwrite=True, cleanup=True)
+            client.upload(dest, path, overwrite=True, cleanup=True)
 
     def copy_to_hdfs(self, path):
         if not (self.copytohdfs and self.hdfs_config):
