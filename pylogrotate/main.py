@@ -7,10 +7,9 @@ import pwd
 import shutil
 import subprocess
 import sys
-from Queue import Empty
-
 import hdfs
 import yaml
+from Queue import Empty
 from pqueue import Queue
 
 DEFAULT_CONFIG = {
