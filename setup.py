@@ -3,13 +3,13 @@ from setuptools import setup, find_packages
 
 setup(
     name='pylogrotate',
-    version='0.0.7',
+    version='0.0.8',
     description='Logrotate in python',
     author='gfreezy',
     author_email='gfreezy@gmail.com',
     url='https://github.com/xiachufang/pylogrotate',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
-    install_requires=['pyyaml'],
+    install_requires=['pyyaml', 'hdfs', 'pqueue'],
     license='MIT',
     classifiers=[
         'Development Status :: 3 - Alpha',

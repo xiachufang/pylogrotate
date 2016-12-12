@@ -8,6 +8,9 @@ import subprocess
 import pwd
 import grp
 import argparse
+import hdfs
+from pqueue import Queue
+from Queue import Empty
 
 
 DEFAULT_CONFIG = {
@@ -17,12 +20,15 @@ DEFAULT_CONFIG = {
     'user': 'root',
     'group': 'root',
     'copy': [],
+    'copytohdfs': [],
+    'hdfs': {},
     'dateformat': '-%Y%m%d',
     'sharedscripts': True,
     'compress': True,
     'destext': 'rotates/%Y%m/%d',
     'prerotate': [],
     'postrotate': [],
+    'queuepath': '/tmp/pylogrotate-queue'
 }
 CONFIG_TEMPLATE = '''---
 - paths:
@@ -35,6 +41,9 @@ CONFIG_TEMPLATE = '''---
   copy:
     - from: /var/log/nginx
       to: /mfs/log/nginx
+  copytohdfs:
+    - from: /var/log/nginx
+      to: /mfs/log/nginx
   dateformat: "-%Y%m%d%H%M%S"
   sharedscripts: yes
   destext: "rotates/%Y%m/%d"
@@ -42,6 +51,10 @@ CONFIG_TEMPLATE = '''---
     - echo prerotate2
   postrotate:
     - invoke-rc.d nginx rotate >/dev/null 2>&1 || true
+  hdfs:
+    url: http://localhost:50070
+    user: xx
+  'queuepath': '/tmp/pylogrotate-queue'
 '''
 
 
@@ -97,11 +110,9 @@ def run(cmd):
 
 
 def gzip(path):
-    if isinstance(path, list):
-        path = ' '.join(path)
     if not path:
         return
-    run('gzip {}'.format(path))
+    run('gzip -kf {}'.format(path))
 
 
 class Rotator(object):
@@ -118,23 +129,32 @@ class Rotator(object):
         self.sharedscripts = config['sharedscripts']
         self.destext = config['destext']
         self.copy = config['copy']
+        self.copytohdfs = config['copytohdfs']
         self.prerotates = config['prerotate']
         self.postrotates = config['postrotate']
+        self.hdfs_config = config['hdfs']
+        self.queuepath = config['queuepath']
+        self.queue_chunksize = 1000
+        self.queue_block_timeout = 30
+        self.queue = Queue(self.queuepath, self.queue_chunksize)
+        self.client = None
+        if self.hdfs_config:
+            self.client = hdfs.InsecureClient(**self.hdfs_config)
 
     def get_rotated_dir(self, path):
         destext = self.now.strftime(self.destext)
         dest_dir = '{}-{}'.format(path, destext)
         return dest_dir
 
-    def get_rotated_time(self, path):
-        dateext = path.rsplit('-', 1)[-1]
+    def get_rotated_time(self, dest_path):
+        dateext = dest_path.rsplit('-', 1)[-1]
         # remove gz ext
         dateext = dateext.split('.')[0]
         return datetime.datetime.strptime('-{}'.format(dateext), self.dateformat)
 
-    def is_rotated_file(self, path):
+    def is_rotated_file(self, dest_path):
         try:
-            t = self.get_rotated_time(path)
+            t = self.get_rotated_time(dest_path)
             return bool(t)
         except:
             return False
@@ -160,53 +180,97 @@ class Rotator(object):
         makedirs(rotated_dir, 0755)
         chown(rotated_dir, self.user, self.group)
 
-    def rotate_file(self, path):
+    def rename_file(self, path):
         self.create_rotated_dir(path)
         dest_path = self.get_dest_path(path)
         shutil.move(path, dest_path)
+
+        self.queue.put((path, dest_path), timeout=self.queue_block_timeout)
+
         os.chmod(dest_path, self.mode)
         chown(dest_path, self.user, self.group)
-        self.remove_old_files(path)
         return dest_path
 
-    def compress_files(self, paths):
-        gzip(paths)
-        return ['{}.gz'.format(p) for p in paths]
+    def compress_file(self, dest_path):
+        gzip(dest_path)
+        return '{}.gz'.format(dest_path)
 
-    def _copy_files(self, paths, from_, to):
+    def _copy_file(self, path, from_, to):
         if not to:
             return
-        for path in paths:
-            dest = os.path.normpath(path.replace(from_, to))
-            dest_dir = os.path.dirname(dest)
-            if not os.path.exists(dest_dir):
-                makedirs(dest_dir, 0755)
-                chown(dest_dir, self.user, self.group)
-            if path.startswith(from_):
-                shutil.copy(path, dest)
+        dest = os.path.normpath(path.replace(from_, to))
+        dest_dir = os.path.dirname(dest)
+        if not os.path.exists(dest_dir):
+            makedirs(dest_dir, 0755)
+            chown(dest_dir, self.user, self.group)
+        if path.startswith(from_):
+            shutil.copy(path, dest)
 
-    def copy_files(self, paths):
+    def copy_file(self, dest_path):
         if isinstance(self.copy, dict):
-            to = self.copy.get('to')
-            from_ = self.copy.get('from', '')
-            self._copy_files(paths, from_, to)
-        else:
-            for item in self.copy:
-                to = item.get('to')
-                from_ = item.get('from', '')
-                self._copy_files(paths, from_, to)
+            self.copy = [self.copy]
+
+        for item in self.copy:
+            to = item.get('to')
+            from_ = item.get('from', '')
+            self._copy_file(dest_path, from_, to)
+
+    def _copy_to_hdfs(self, client, path, from_, to):
+        if not to:
+            return
+        dest = os.path.normpath(path.replace(from_, to))
+        if path.startswith(from_):
+            client.upload(dest, from_, overwrite=True, cleanup=True)
+
+    def copy_to_hdfs(self, path):
+        if not (self.copytohdfs and self.hdfs_config):
+            return
+        for item in self.copytohdfs:
+            to = item.get('to')
+            from_ = item.get('from', '')
+            self._copy_to_hdfs(self.client, path, from_, to)
+
+    def secure_copy(self):
+        to_be_clean = set()
+        while True:
+            try:
+                path, rotated_path = self.queue.get_nowait()
+                rotated_path_before = rotated_path
+                if not os.path.exists(rotated_path):
+                    self.queue.task_done()
+                    continue
+
+                if self.compress:
+                    rotated_path = self.compress_file(rotated_path)
+                if self.copy:
+                    self.copy_file(rotated_path)
+
+                if self.copytohdfs:
+                    self.copy_to_hdfs(rotated_path)
+
+                self.queue.task_done()
+
+                if self.compress:
+                    os.remove(rotated_path_before)
+
+                to_be_clean.add(path)
+            except Empty:
+                break
+            except Exception as e:
+                print e
+
+        for path in to_be_clean:
+            self.remove_old_files(path)
 
     def rotate(self):
         if self.sharedscripts:
             self.prerotate()
 
-        new_paths = []
         for f in iterate_log_paths(self.config['paths']):
             if not self.sharedscripts:
                 self.prerotate()
 
-            new_path = self.rotate_file(f)
-            new_paths.append(new_path)
+            self.rename_file(f)
 
             if not self.sharedscripts:
                 self.postrotate()
@@ -214,11 +278,7 @@ class Rotator(object):
         if self.sharedscripts:
             self.postrotate()
 
-        if self.compress:
-            paths = self.compress_files(new_paths)
-
-        if self.copy:
-            self.copy_files(paths)
+        self.secure_copy()
 
     def prerotate(self):
         for cmd in self.prerotates:
