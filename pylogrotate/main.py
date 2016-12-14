@@ -53,7 +53,7 @@ CONFIG_TEMPLATE = '''---
   hdfs:
     url: http://localhost:50070
     user: xx
-  'queuepath': '/tmp/pylogrotate-queue'
+  queuepath: /tmp/pylogrotate-queue
 '''
 
 
