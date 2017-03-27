@@ -120,8 +120,9 @@ def rec_log(split_datetime, log_tag, log_home='/mfs/log/nginx'):
                 write(log_home, log_tag, dt, subdir_name, log_matrix)
                 start_time = None
                 log_matrix = list()
-        rotated_time = start_time + datetime.timedelta(minutes=5)
-        write(log_home, log_tag, rotated_time, subdir_name, log_matrix)
+        if start_time:
+            rotated_time = start_time + datetime.timedelta(minutes=5)
+            write(log_home, log_tag, rotated_time, subdir_name, log_matrix)
 
 
 def truncate_time(d):
