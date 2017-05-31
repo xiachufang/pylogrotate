@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import argparse
 import datetime
+import errno
 import glob
 import grp
 import hdfs
@@ -81,7 +82,7 @@ def makedirs(path, mode):
     try:
         os.makedirs(path, mode)
     except OSError as e:
-        if e.errno != 17:
+        if e.errno != errno.EEXIST:
             raise
 
 
