@@ -1,21 +1,37 @@
+# coding: utf-8
+
+from __future__ import print_function
+
 import argparse
 import datetime
+import errno
 import glob
 import grp
+import hdfs
 import os
 import pwd
 import shutil
 import subprocess
 import sys
-import hdfs
 import yaml
-from Queue import Empty
+
 from pqueue import Queue
+
+try:
+    from Queue import Empty
+except ImportError:
+    from queue import Empty
+
+if sys.version_info[0] == 2:
+    string_types = (str, unicode)
+else:
+    string_types = (str, bytes)
+
 
 DEFAULT_CONFIG = {
     'paths': [],
     'rotate': 7,
-    'mode': 0644,
+    'mode': 0o644,
     'user': 'root',
     'group': 'root',
     'copy': [],
@@ -29,6 +45,7 @@ DEFAULT_CONFIG = {
     'postrotate': [],
     'queuepath': '/tmp/pylogrotate-queue'
 }
+
 CONFIG_TEMPLATE = '''---
 - paths:
     - "/var/log/nginx/*.log"
@@ -70,12 +87,16 @@ def makedirs(path, mode):
     try:
         os.makedirs(path, mode)
     except OSError as e:
-        if e.errno != 17:
+        if e.errno != errno.EEXIST:
             raise
 
 
+def is_empty_file(path):
+    return os.path.isfile(path) and os.path.getsize(path) == 0
+
+
 def parse_config(path):
-    if isinstance(path, basestring):
+    if isinstance(path, string_types):
         with open(path) as f:
             config = yaml.load(f)
     else:
@@ -103,8 +124,8 @@ def run(cmd):
     pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     pipe.wait()
     if pipe.returncode != 0:
-        print pipe.stdout.read()
-        print >> sys.stderr, pipe.stderr.read()
+        print(pipe.stdout.read())
+        print(pipe.stderr.read(), file=sys.stderr)
         sys.exit(pipe.returncode)
 
 
@@ -115,13 +136,14 @@ def gzip(path):
 
 
 class Rotator(object):
+
     def __init__(self, config):
         self.config = config
         self.dateformat = config['dateformat']
         self.keep_files = int(config['rotate'])
         self.now = datetime.datetime.now()
         self.dateext = self.now.strftime(self.dateformat)
-        self.mode = config['mode']
+        self.mode = int(config['mode'], 8)
         self.compress = config['compress']
         self.user = config['user']
         self.group = config['group']
@@ -176,7 +198,7 @@ class Rotator(object):
 
     def create_rotated_dir(self, path):
         rotated_dir = self.get_rotated_dir(path)
-        makedirs(rotated_dir, 0755)
+        makedirs(rotated_dir, 0o755)
         chown(rotated_dir, self.user, self.group)
 
     def rename_file(self, path):
@@ -200,7 +222,7 @@ class Rotator(object):
         dest = os.path.normpath(path.replace(from_, to))
         dest_dir = os.path.dirname(dest)
         if not os.path.exists(dest_dir):
-            makedirs(dest_dir, 0755)
+            makedirs(dest_dir, 0o755)
             chown(dest_dir, self.user, self.group)
         if path.startswith(from_):
             shutil.copy(path, dest)
@@ -256,7 +278,7 @@ class Rotator(object):
             except Empty:
                 break
             except Exception as e:
-                print e
+                print(e)
 
         for path in to_be_clean:
             self.remove_old_files(path)
@@ -266,6 +288,9 @@ class Rotator(object):
             self.prerotate()
 
         for f in iterate_log_paths(self.config['paths']):
+            if is_empty_file(f):
+                continue
+
             if not self.sharedscripts:
                 self.prerotate()
 

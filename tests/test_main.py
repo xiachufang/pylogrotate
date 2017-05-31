@@ -23,12 +23,13 @@ def rotator(config):
     return Rotator(config[0])
 
 
-class TestRotater(object):
+class TestRotator(object):
+
     def test_get_rotated_time(self, rotator):
         path = '/var/log/nginx/access.log-20160910101030'
         assert rotator.get_rotated_time(path) == datetime.datetime(2016, 9, 10, 10, 10, 30)
 
-    def test_get_rotated_time(self, rotator):
+    def test_get_rotated_time2(self, rotator):
         with pytest.raises(Exception):
             rotator.get_rotated_time('/var/log/nginx/access.log-20160910-1010301')
 
@@ -39,4 +40,7 @@ class TestRotater(object):
             rotator.get_rotated_time('/var/log/nginx/access.log201609101')
 
     def test_remove_old_files(self, rotator):
+        pass
+
+    def test_skip_empty_files(self, rotator):
         pass
