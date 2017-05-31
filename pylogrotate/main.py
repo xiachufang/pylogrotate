@@ -86,6 +86,10 @@ def makedirs(path, mode):
             raise
 
 
+def is_empty_file(path):
+    return os.path.isfile(path) and os.path.getsize(path) == 0
+
+
 def parse_config(path):
     if isinstance(path, basestring):
         with open(path) as f:
@@ -127,6 +131,7 @@ def gzip(path):
 
 
 class Rotator(object):
+
     def __init__(self, config):
         self.config = config
         self.dateformat = config['dateformat']
@@ -278,6 +283,9 @@ class Rotator(object):
             self.prerotate()
 
         for f in iterate_log_paths(self.config['paths']):
+            if is_empty_file(f):
+                continue
+
             if not self.sharedscripts:
                 self.prerotate()
 

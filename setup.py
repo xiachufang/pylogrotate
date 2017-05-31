@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 
 setup(
     name='pylogrotate',
-    version='0.0.10',
-    description='Logrotate in python',
+    version='0.0.11',
+    description='Logrotate in Python',
     author='gfreezy',
     author_email='gfreezy@gmail.com',
     url='https://github.com/xiachufang/pylogrotate',
