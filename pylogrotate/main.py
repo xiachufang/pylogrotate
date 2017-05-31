@@ -143,7 +143,7 @@ class Rotator(object):
         self.keep_files = int(config['rotate'])
         self.now = datetime.datetime.now()
         self.dateext = self.now.strftime(self.dateformat)
-        self.mode = config['mode']
+        self.mode = int(config['mode'], 8)
         self.compress = config['compress']
         self.user = config['user']
         self.group = config['group']
