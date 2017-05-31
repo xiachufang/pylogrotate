@@ -22,6 +22,11 @@ try:
 except ImportError:
     from queue import Empty
 
+if sys.version_info[0] == 2:
+    string_types = (str, unicode)
+else:
+    string_types = (str, bytes)
+
 
 DEFAULT_CONFIG = {
     'paths': [],
@@ -91,7 +96,7 @@ def is_empty_file(path):
 
 
 def parse_config(path):
-    if isinstance(path, basestring):
+    if isinstance(path, string_types):
         with open(path) as f:
             config = yaml.load(f)
     else:
