@@ -1,21 +1,31 @@
+# coding: utf-8
+
+from __future__ import print_function
+
 import argparse
 import datetime
 import glob
 import grp
+import hdfs
 import os
 import pwd
 import shutil
 import subprocess
 import sys
-import hdfs
 import yaml
-from Queue import Empty
+
 from pqueue import Queue
+
+try:
+    from Queue import Empty
+except ImportError:
+    from queue import Empty
+
 
 DEFAULT_CONFIG = {
     'paths': [],
     'rotate': 7,
-    'mode': 0644,
+    'mode': 0o644,
     'user': 'root',
     'group': 'root',
     'copy': [],
@@ -29,6 +39,7 @@ DEFAULT_CONFIG = {
     'postrotate': [],
     'queuepath': '/tmp/pylogrotate-queue'
 }
+
 CONFIG_TEMPLATE = '''---
 - paths:
     - "/var/log/nginx/*.log"
@@ -103,8 +114,8 @@ def run(cmd):
     pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     pipe.wait()
     if pipe.returncode != 0:
-        print pipe.stdout.read()
-        print >> sys.stderr, pipe.stderr.read()
+        print(pipe.stdout.read())
+        print(pipe.stderr.read(), file=sys.stderr)
         sys.exit(pipe.returncode)
 
 
@@ -176,7 +187,7 @@ class Rotator(object):
 
     def create_rotated_dir(self, path):
         rotated_dir = self.get_rotated_dir(path)
-        makedirs(rotated_dir, 0755)
+        makedirs(rotated_dir, 0o755)
         chown(rotated_dir, self.user, self.group)
 
     def rename_file(self, path):
@@ -200,7 +211,7 @@ class Rotator(object):
         dest = os.path.normpath(path.replace(from_, to))
         dest_dir = os.path.dirname(dest)
         if not os.path.exists(dest_dir):
-            makedirs(dest_dir, 0755)
+            makedirs(dest_dir, 0o755)
             chown(dest_dir, self.user, self.group)
         if path.startswith(from_):
             shutil.copy(path, dest)
@@ -256,7 +267,7 @@ class Rotator(object):
             except Empty:
                 break
             except Exception as e:
-                print e
+                print(e)
 
         for path in to_be_clean:
             self.remove_old_files(path)
