@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pylogrotate',
-    version='0.0.11',
+    version='0.0.12',
     description='Logrotate in Python',
     author='gfreezy',
     author_email='gfreezy@gmail.com',

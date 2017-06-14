@@ -269,16 +269,17 @@ class Rotator(object):
                 if self.copytohdfs:
                     self.copy_to_hdfs(rotated_path)
 
-                self.queue.task_done()
-
                 if self.compress:
                     os.remove(rotated_path_before)
+
+                self.queue.task_done()
 
                 to_be_clean.add(path)
             except Empty:
                 break
             except Exception as e:
                 print(e)
+                raise
 
         for path in to_be_clean:
             self.remove_old_files(path)
