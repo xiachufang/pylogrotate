@@ -225,7 +225,7 @@ class Rotator(object):
             makedirs(dest_dir, 0o755)
             chown(dest_dir, self.user, self.group)
         if path.startswith(from_):
-            shutil.copy(path, dest)
+            shutil.copy2(path, dest)
 
     def copy_file(self, dest_path):
         if isinstance(self.copy, dict):
