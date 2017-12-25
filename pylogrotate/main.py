@@ -31,7 +31,7 @@ else:
 DEFAULT_CONFIG = {
     'paths': [],
     'rotate': 7,
-    'mode': 0o644,
+    'mode': '0o644',
     'user': 'root',
     'group': 'root',
     'copy': [],
