@@ -46,33 +46,6 @@ DEFAULT_CONFIG = {
     'queuepath': '/tmp/pylogrotate-queue'
 }
 
-CONFIG_TEMPLATE = '''---
-- paths:
-    - "/var/log/nginx/*.log"
-  rotate: 7
-  mode: 0640
-  user: nobody
-  group: nobody
-  compress: yes
-  copy:
-    - from: /var/log/nginx
-      to: /mfs/log/nginx
-  copytohdfs:
-    - from: /var/log/nginx
-      to: /mfs/log/nginx
-  dateformat: "-%Y%m%d%H%M%S"
-  sharedscripts: yes
-  destext: "rotates/%Y%m/%d"
-  prerotate:
-    - echo prerotate2
-  postrotate:
-    - invoke-rc.d nginx rotate >/dev/null 2>&1 || true
-  hdfs:
-    url: http://localhost:50070
-    user: xx
-  queuepath: /tmp/pylogrotate-queue
-'''
-
 
 def chown(path, user, group):
     uid = pwd.getpwnam(user).pw_uid
@@ -107,11 +80,6 @@ def parse_config(path):
         d.update(c)
         cs.append(d)
     return cs
-
-
-def generate_default_config():
-    with open('default.yml', 'w') as f:
-        f.write(CONFIG_TEMPLATE)
 
 
 def iterate_log_paths(globs):
@@ -203,6 +171,7 @@ class Rotator(object):
 
     def rename_file(self, path):
         self.create_rotated_dir(path)
+
         dest_path = self.get_dest_path(path)
         shutil.move(path, dest_path)
 
@@ -316,16 +285,9 @@ class Rotator(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Rotate logs.')
-    parser.add_argument('-c', '--config', help='Path to config.', type=argparse.FileType('r'))
-    parser.add_argument('-g', '--generate', action='store_true', help='Generate a default config.')
-    args = parser.parse_args()
-    if not args.config and not args.generate:
-        parser.print_help()
-        sys.exit(0)
+    parser.add_argument('-c', '--config', help='Path to the config file.', type=argparse.FileType('r'), required=True)
 
-    if args.generate:
-        generate_default_config()
-        sys.exit(0)
+    args = parser.parse_args()
 
     configs = parse_config(args.config)
     for config in configs:
