@@ -11,6 +11,7 @@ import hdfs
 import os
 import pwd
 import shutil
+import socket
 import subprocess
 import sys
 import yaml
@@ -40,6 +41,7 @@ DEFAULT_CONFIG = {
     'hdfs': {},
     'dateformat': '%Y%m%d',
     'destext': 'rotates/%Y%m/%d',
+    'fnformat': '{logname}-{timestamp}',
     'sharedscripts': True,
     'prerotate': [],
     'postrotate': [],
@@ -128,6 +130,10 @@ class Rotator(object):
         self.timestamp = self.now.strftime(self.dateformat)
         self.destext = config['destext']
 
+        self.fnformat = config['fnformat']
+        if not self.fnformat:
+            raise ValueError("'fnformat' cannot be empty")
+
         self.sharedscripts = config['sharedscripts']
         self.prerotates = config['prerotate']
         self.postrotates = config['postrotate']
@@ -145,7 +151,7 @@ class Rotator(object):
     def get_dest_path(self, path):
         rotated_dir = self.get_rotated_dir(path)
         logname = os.path.basename(path)
-        dest_path = os.path.join(rotated_dir, '{}-{}'.format(logname, self.timestamp))
+        dest_path = os.path.join(rotated_dir, self.fnformat.format(logname=logname, timestamp=self.timestamp, hostname=socket.gethostname()))
         return dest_path
 
     def create_rotated_dir(self, path):
