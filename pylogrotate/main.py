@@ -156,14 +156,14 @@ class Rotator(object):
 
     def get_dest_path(self, path):
         rotated_dir = self.get_rotated_dir(path)
-        filename = os.path.split(path)[-1]
-        dest_path = os.path.join(rotated_dir, '{}-{}'.format(filename, self.dateext))
+        logname = os.path.basename(path)
+        dest_path = os.path.join(rotated_dir, '{}-{}'.format(logname, self.timestamp))
         return dest_path
 
     def remove_old_files(self, path):
         rotated_dir = self.get_rotated_dir(path)
-        filename = os.path.split(path)[-1]
-        path = os.path.join(rotated_dir, filename)
+        logname = os.path.basename(path)
+        path = os.path.join(rotated_dir, logname)
         glob_path = '{}-*'.format(path)
         files = [f for f in glob.glob(glob_path) if self.is_rotated_file(f)]
         files.sort(key=self.get_rotated_time, reverse=True)
