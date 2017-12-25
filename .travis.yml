@@ -1,13 +1,13 @@
 language: python
 python:
-- '2.7'
+  - '2.7'
 script: echo ok
 deploy:
   provider: pypi
   user: xiachufang
   password:
     secure: w7euyNLx23eeSCZchscR8PIaY+cZovGnjza1lGCgOIkJjCXDrcB6J+q5Yok3y4IKFGwD5oO/2X9lLfkAFQ8Zi3BnHEytXxlaQBbvqXUogTxrPoPxo+OkbVmFN6p5AkX1GsglBAku80CKO8uWgg0IsAHp4wrAaBQX3izMPH300QsReawmjx+Tsi3hdpQVSdx3qaruwrsKRk6X2JOPTzVC+AFGmDJHW26pN7+BZ+uCQkWQRt7bNbLebcm/hxWuH5h5zBovd5axWAY6jT8KCCGvQ0nEh9bEY9195a6I380BuLRBfGIQFWSObvZTtHa9eHYnFTAZ2M61dJXWziSveIhcQ3qVYptdoN1JpOmeqGBEU24E9XrqZPbLQlsg5CLHkns641fHLlsictBBFBy8JmhDZT/UN9RTiooVcLufGrJsg/vbW0CvFMP0gD9+Xim+pym7S+myzIOOyYZjMpSO0laicrVR6HBMCv8GpLzJGrqHP7h1IQiistT3yCk/VzazXiguxj86TbtR3/CwkMb/y07G+FQhDFgtATn0OgSm/eLf1mIXh2t3WJSan23M4ci+THnIonjTeapMPdS14zH/U8hBSpRImmDYVPInzg5rcl2hIiVYGTH0gTGK01kKBFEwbygmagb+hC3qOLDhgwFrAueFlYwefi+izy4fH71WfMi9e/A=
+  distributions: sdist bdist_wheel
   on:
     tags: true
-    distributions: sdist bdist_wheel
     repo: xiachufang/pylogrotate
