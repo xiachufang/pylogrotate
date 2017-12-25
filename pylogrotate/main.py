@@ -30,17 +30,17 @@ else:
 
 DEFAULT_CONFIG = {
     'paths': [],
-    'rotate': 7,
     'mode': '0o644',
     'user': 'root',
     'group': 'root',
+    'rotate': 7,
+    'compress': True,
     'copy': [],
     'copytohdfs': [],
     'hdfs': {},
     'dateformat': '%Y%m%d',
-    'sharedscripts': True,
-    'compress': True,
     'destext': 'rotates/%Y%m/%d',
+    'sharedscripts': True,
     'prerotate': [],
     'postrotate': [],
     'queuepath': '/tmp/pylogrotate-queue'
@@ -107,28 +107,34 @@ class Rotator(object):
 
     def __init__(self, config):
         self.paths = config['paths']
-        self.dateformat = config['dateformat']
-        self.keep_files = int(config['rotate'])
-        self.now = datetime.datetime.now()
-        self.dateext = self.now.strftime(self.dateformat)
+
         self.mode = int(config['mode'], 8)
-        self.compress = config['compress']
         self.user = config['user']
         self.group = config['group']
-        self.sharedscripts = config['sharedscripts']
-        self.destext = config['destext']
+
+        self.keep_files = int(config['rotate'])
+        self.compress = config['compress']
+
         self.copy = config['copy']
         self.copytohdfs = config['copytohdfs']
+        self.hdfs_config = config['hdfs']
+        self.hdfs_client = None
+        if self.hdfs_config:
+            self.hdfs_client = hdfs.InsecureClient(**self.hdfs_config)
+
+        self.dateformat = config['dateformat']
+        self.now = datetime.datetime.now()
+        self.timestamp = self.now.strftime(self.dateformat)
+        self.destext = config['destext']
+
+        self.sharedscripts = config['sharedscripts']
         self.prerotates = config['prerotate']
         self.postrotates = config['postrotate']
-        self.hdfs_config = config['hdfs']
+
         self.queuepath = config['queuepath']
         self.queue_chunksize = 1000
         self.queue_block_timeout = 30
         self.queue = Queue(self.queuepath, self.queue_chunksize)
-        self.client = None
-        if self.hdfs_config:
-            self.client = hdfs.InsecureClient(**self.hdfs_config)
 
     def get_rotated_dir(self, path):
         destext = self.now.strftime(self.destext)
@@ -218,7 +224,7 @@ class Rotator(object):
         for item in self.copytohdfs:
             to = item.get('to')
             from_ = item.get('from', '')
-            self._copy_to_hdfs(self.client, path, from_, to)
+            self._copy_to_hdfs(self.hdfs_client, path, from_, to)
 
     def secure_copy(self):
         to_be_clean = set()
