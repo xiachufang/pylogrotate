@@ -16,6 +16,7 @@ setup(
     url='https://github.com/xiachufang/pylogrotate',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=install_requires,
+    extras_require=dict(test=['pytest', 'freezegun']),
     license='MIT',
     classifiers=[
         'Development Status :: 3 - Alpha',
