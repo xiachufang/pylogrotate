@@ -33,7 +33,7 @@ DEFAULT_CONFIG = {
     'mode': '0o644',
     'user': 'root',
     'group': 'root',
-    'rotate': 7,
+    # 'rotate': 7,
     'compress': True,
     'copy': [],
     'copytohdfs': [],
@@ -112,7 +112,8 @@ class Rotator(object):
         self.user = config['user']
         self.group = config['group']
 
-        self.keep_files = int(config['rotate'])
+        # FIXME: Handle rotated files keeping correctly
+        # self.keep_files = int(config['rotate'])
         self.compress = config['compress']
 
         self.copy = config['copy']
@@ -141,34 +142,11 @@ class Rotator(object):
         dest_dir = '{}-{}'.format(path, destext)
         return dest_dir
 
-    def get_rotated_time(self, dest_path):
-        dateext = dest_path.rsplit('-', 1)[-1]
-        # remove gz ext
-        dateext = dateext.split('.')[0]
-        return datetime.datetime.strptime('{}'.format(dateext), self.dateformat)
-
-    def is_rotated_file(self, dest_path):
-        try:
-            t = self.get_rotated_time(dest_path)
-            return bool(t)
-        except:
-            return False
-
     def get_dest_path(self, path):
         rotated_dir = self.get_rotated_dir(path)
         logname = os.path.basename(path)
         dest_path = os.path.join(rotated_dir, '{}-{}'.format(logname, self.timestamp))
         return dest_path
-
-    def remove_old_files(self, path):
-        rotated_dir = self.get_rotated_dir(path)
-        logname = os.path.basename(path)
-        path = os.path.join(rotated_dir, logname)
-        glob_path = '{}-*'.format(path)
-        files = [f for f in glob.glob(glob_path) if self.is_rotated_file(f)]
-        files.sort(key=self.get_rotated_time, reverse=True)
-        for f in files[self.keep_files:]:
-            os.remove(f)
 
     def create_rotated_dir(self, path):
         rotated_dir = self.get_rotated_dir(path)
@@ -227,7 +205,6 @@ class Rotator(object):
             self._copy_to_hdfs(self.hdfs_client, path, from_, to)
 
     def secure_copy(self):
-        to_be_clean = set()
         while True:
             try:
                 path, rotated_path = self.queue.get_nowait()
@@ -238,6 +215,7 @@ class Rotator(object):
 
                 if self.compress:
                     rotated_path = self.compress_file(rotated_path)
+
                 if self.copy:
                     self.copy_file(rotated_path)
 
@@ -249,15 +227,11 @@ class Rotator(object):
 
                 self.queue.task_done()
 
-                to_be_clean.add(path)
             except Empty:
                 break
             except Exception as e:
                 print(e)
                 raise
-
-        for path in to_be_clean:
-            self.remove_old_files(path)
 
     def rotate(self):
         if self.sharedscripts:
