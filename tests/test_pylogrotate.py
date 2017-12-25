@@ -1,7 +1,10 @@
 # coding: utf-8
 
+import grp
 import gzip
 import io
+import os
+import pwd
 import socket
 
 import pytest
@@ -11,14 +14,14 @@ from pylogrotate.main import parse_config, Rotator
 
 
 CONFIG = '''---
-- user: nobody
-  group: nobody
-  dateformat: '%Y%m%d%H%M%S'
+- dateformat: '%Y%m%d%H%M%S'
 '''
 
 
 def get_config(**kwargs):
     config = parse_config(io.BytesIO(CONFIG))[0]
+    config['user'] = pwd.getpwuid(os.geteuid()).pw_name
+    config['group'] = grp.getgrgid(os.getegid()).gr_name
     config.update(kwargs)
     return config
 
