@@ -106,7 +106,7 @@ def gzip(path):
 class Rotator(object):
 
     def __init__(self, config):
-        self.config = config
+        self.paths = config['paths']
         self.dateformat = config['dateformat']
         self.keep_files = int(config['rotate'])
         self.now = datetime.datetime.now()
@@ -257,7 +257,7 @@ class Rotator(object):
         if self.sharedscripts:
             self.prerotate()
 
-        for f in iterate_log_paths(self.config['paths']):
+        for f in iterate_log_paths(self.paths):
             if is_empty_file(f):
                 continue
 
