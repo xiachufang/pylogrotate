@@ -37,7 +37,7 @@ DEFAULT_CONFIG = {
     'copy': [],
     'copytohdfs': [],
     'hdfs': {},
-    'dateformat': '-%Y%m%d',
+    'dateformat': '%Y%m%d',
     'sharedscripts': True,
     'compress': True,
     'destext': 'rotates/%Y%m/%d',
@@ -139,7 +139,7 @@ class Rotator(object):
         dateext = dest_path.rsplit('-', 1)[-1]
         # remove gz ext
         dateext = dateext.split('.')[0]
-        return datetime.datetime.strptime('-{}'.format(dateext), self.dateformat)
+        return datetime.datetime.strptime('{}'.format(dateext), self.dateformat)
 
     def is_rotated_file(self, dest_path):
         try:
@@ -151,7 +151,7 @@ class Rotator(object):
     def get_dest_path(self, path):
         rotated_dir = self.get_rotated_dir(path)
         filename = os.path.split(path)[-1]
-        dest_path = os.path.join(rotated_dir, '{}{}'.format(filename, self.dateext))
+        dest_path = os.path.join(rotated_dir, '{}-{}'.format(filename, self.dateext))
         return dest_path
 
     def remove_old_files(self, path):
