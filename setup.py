@@ -1,5 +1,11 @@
 #!/usr/bin/env python
+
 from setuptools import setup, find_packages
+
+
+with open('requirements.txt') as f:
+    install_requires = [l.strip() for l in f]
+
 
 setup(
     name='pylogrotate',
@@ -9,7 +15,7 @@ setup(
     author_email='gfreezy@gmail.com',
     url='https://github.com/xiachufang/pylogrotate',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
-    install_requires=['pyyaml', 'hdfs', 'pqueue'],
+    install_requires=install_requires,
     license='MIT',
     classifiers=[
         'Development Status :: 3 - Alpha',
