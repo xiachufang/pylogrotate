@@ -9,7 +9,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='pylogrotate',
-    version='0.0.12',
+    version='0.0.13',
     description='Logrotate in Python',
     author='gfreezy',
     author_email='gfreezy@gmail.com',
