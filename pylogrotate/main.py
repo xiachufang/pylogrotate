@@ -11,6 +11,7 @@ import hdfs
 import os
 import pwd
 import shutil
+import socket
 import subprocess
 import sys
 import yaml
@@ -30,48 +31,22 @@ else:
 
 DEFAULT_CONFIG = {
     'paths': [],
-    'rotate': 7,
-    'mode': 0o644,
+    'mode': '0o644',
     'user': 'root',
     'group': 'root',
+    # 'rotate': 7,
+    'compress': True,
     'copy': [],
     'copytohdfs': [],
     'hdfs': {},
-    'dateformat': '-%Y%m%d',
-    'sharedscripts': True,
-    'compress': True,
+    'dateformat': '%Y%m%d',
     'destext': 'rotates/%Y%m/%d',
+    'fnformat': '{logname}-{timestamp}',
+    'sharedscripts': True,
     'prerotate': [],
     'postrotate': [],
     'queuepath': '/tmp/pylogrotate-queue'
 }
-
-CONFIG_TEMPLATE = '''---
-- paths:
-    - "/var/log/nginx/*.log"
-  rotate: 7
-  mode: 0640
-  user: nobody
-  group: nobody
-  compress: yes
-  copy:
-    - from: /var/log/nginx
-      to: /mfs/log/nginx
-  copytohdfs:
-    - from: /var/log/nginx
-      to: /mfs/log/nginx
-  dateformat: "-%Y%m%d%H%M%S"
-  sharedscripts: yes
-  destext: "rotates/%Y%m/%d"
-  prerotate:
-    - echo prerotate2
-  postrotate:
-    - invoke-rc.d nginx rotate >/dev/null 2>&1 || true
-  hdfs:
-    url: http://localhost:50070
-    user: xx
-  queuepath: /tmp/pylogrotate-queue
-'''
 
 
 def chown(path, user, group):
@@ -109,11 +84,6 @@ def parse_config(path):
     return cs
 
 
-def generate_default_config():
-    with open('default.yml', 'w') as f:
-        f.write(CONFIG_TEMPLATE)
-
-
 def iterate_log_paths(globs):
     for g in globs:
         for f in glob.iglob(g):
@@ -138,63 +108,51 @@ def gzip(path):
 class Rotator(object):
 
     def __init__(self, config):
-        self.config = config
-        self.dateformat = config['dateformat']
-        self.keep_files = int(config['rotate'])
-        self.now = datetime.datetime.now()
-        self.dateext = self.now.strftime(self.dateformat)
+        self.paths = config['paths']
+
         self.mode = int(config['mode'], 8)
-        self.compress = config['compress']
         self.user = config['user']
         self.group = config['group']
-        self.sharedscripts = config['sharedscripts']
-        self.destext = config['destext']
+
+        # FIXME: Handle rotated files keeping correctly
+        # self.keep_files = int(config['rotate'])
+        self.compress = config['compress']
+
         self.copy = config['copy']
         self.copytohdfs = config['copytohdfs']
+        self.hdfs_config = config['hdfs']
+        self.hdfs_client = None
+        if self.hdfs_config:
+            self.hdfs_client = hdfs.InsecureClient(**self.hdfs_config)
+
+        self.dateformat = config['dateformat']
+        self.now = datetime.datetime.now()
+        self.timestamp = self.now.strftime(self.dateformat)
+        self.destext = config['destext']
+
+        self.fnformat = config['fnformat']
+        if not self.fnformat:
+            raise ValueError("'fnformat' cannot be empty")
+
+        self.sharedscripts = config['sharedscripts']
         self.prerotates = config['prerotate']
         self.postrotates = config['postrotate']
-        self.hdfs_config = config['hdfs']
+
         self.queuepath = config['queuepath']
         self.queue_chunksize = 1000
         self.queue_block_timeout = 30
         self.queue = Queue(self.queuepath, self.queue_chunksize)
-        self.client = None
-        if self.hdfs_config:
-            self.client = hdfs.InsecureClient(**self.hdfs_config)
 
     def get_rotated_dir(self, path):
         destext = self.now.strftime(self.destext)
         dest_dir = '{}-{}'.format(path, destext)
         return dest_dir
 
-    def get_rotated_time(self, dest_path):
-        dateext = dest_path.rsplit('-', 1)[-1]
-        # remove gz ext
-        dateext = dateext.split('.')[0]
-        return datetime.datetime.strptime('-{}'.format(dateext), self.dateformat)
-
-    def is_rotated_file(self, dest_path):
-        try:
-            t = self.get_rotated_time(dest_path)
-            return bool(t)
-        except:
-            return False
-
     def get_dest_path(self, path):
         rotated_dir = self.get_rotated_dir(path)
-        filename = os.path.split(path)[-1]
-        dest_path = os.path.join(rotated_dir, '{}{}'.format(filename, self.dateext))
+        logname = os.path.basename(path)
+        dest_path = os.path.join(rotated_dir, self.fnformat.format(logname=logname, timestamp=self.timestamp, hostname=socket.gethostname()))
         return dest_path
-
-    def remove_old_files(self, path):
-        rotated_dir = self.get_rotated_dir(path)
-        filename = os.path.split(path)[-1]
-        path = os.path.join(rotated_dir, filename)
-        glob_path = '{}-*'.format(path)
-        files = [f for f in glob.glob(glob_path) if self.is_rotated_file(f)]
-        files.sort(key=self.get_rotated_time, reverse=True)
-        for f in files[self.keep_files:]:
-            os.remove(f)
 
     def create_rotated_dir(self, path):
         rotated_dir = self.get_rotated_dir(path)
@@ -203,6 +161,7 @@ class Rotator(object):
 
     def rename_file(self, path):
         self.create_rotated_dir(path)
+
         dest_path = self.get_dest_path(path)
         shutil.move(path, dest_path)
 
@@ -249,10 +208,9 @@ class Rotator(object):
         for item in self.copytohdfs:
             to = item.get('to')
             from_ = item.get('from', '')
-            self._copy_to_hdfs(self.client, path, from_, to)
+            self._copy_to_hdfs(self.hdfs_client, path, from_, to)
 
     def secure_copy(self):
-        to_be_clean = set()
         while True:
             try:
                 path, rotated_path = self.queue.get_nowait()
@@ -263,6 +221,7 @@ class Rotator(object):
 
                 if self.compress:
                     rotated_path = self.compress_file(rotated_path)
+
                 if self.copy:
                     self.copy_file(rotated_path)
 
@@ -274,21 +233,17 @@ class Rotator(object):
 
                 self.queue.task_done()
 
-                to_be_clean.add(path)
             except Empty:
                 break
             except Exception as e:
                 print(e)
                 raise
 
-        for path in to_be_clean:
-            self.remove_old_files(path)
-
     def rotate(self):
         if self.sharedscripts:
             self.prerotate()
 
-        for f in iterate_log_paths(self.config['paths']):
+        for f in iterate_log_paths(self.paths):
             if is_empty_file(f):
                 continue
 
@@ -316,16 +271,9 @@ class Rotator(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Rotate logs.')
-    parser.add_argument('-c', '--config', help='Path to config.', type=argparse.FileType('r'))
-    parser.add_argument('-g', '--generate', action='store_true', help='Generate a default config.')
-    args = parser.parse_args()
-    if not args.config and not args.generate:
-        parser.print_help()
-        sys.exit(0)
+    parser.add_argument('-c', '--config', help='Path to the config file.', type=argparse.FileType('r'), required=True)
 
-    if args.generate:
-        generate_default_config()
-        sys.exit(0)
+    args = parser.parse_args()
 
     configs = parse_config(args.config)
     for config in configs:
