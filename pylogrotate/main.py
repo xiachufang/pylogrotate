@@ -73,9 +73,9 @@ def is_empty_file(path):
 def parse_config(path):
     if isinstance(path, string_types):
         with open(path) as f:
-            config = yaml.load(f)
+            config = yaml.safe_load(f)
     else:
-        config = yaml.load(path)
+        config = yaml.safe_load(path)
     cs = []
     for c in config:
         d = DEFAULT_CONFIG.copy()
