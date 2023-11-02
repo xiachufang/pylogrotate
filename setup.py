@@ -3,13 +3,12 @@
 from setuptools import setup, find_packages
 
 
-with open('requirements.txt') as f:
-    install_requires = [l.strip() for l in f]
+install_requires = ['pyyaml', 'hdfs', 'pqueue']
 
 
 setup(
     name='pylogrotate',
-    version='0.0.13',
+    version='0.0.14',
     description='Logrotate in Python',
     author='gfreezy',
     author_email='gfreezy@gmail.com',
