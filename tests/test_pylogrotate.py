@@ -19,7 +19,7 @@ CONFIG = '''---
 
 
 def get_config(**kwargs):
-    config = parse_config(io.BytesIO(CONFIG))[0]
+    config = parse_config(io.StringIO(CONFIG))[0]
     config['user'] = pwd.getpwuid(os.geteuid()).pw_name
     config['group'] = grp.getgrgid(os.getegid()).gr_name
     config.update(kwargs)
@@ -51,7 +51,8 @@ def test_pre_post_rotate(capsys, phase):
         rotator.rotate()
 
     out, _ = capsys.readouterr()
-    assert out == '{}\n\n'.format(phase)
+    expected_out = bytes('{}\n'.format(phase), 'utf-8')
+    assert out == '{}\n'.format(expected_out)
 
 
 def _traverse(path):
@@ -61,7 +62,7 @@ def _traverse(path):
 
 
 def test_rotate(tmpdir):
-    content = 'This log file should be rotated.'
+    content = b'This log file should be rotated.'
 
     f = tmpdir.mkdir('nginx').join('access.rotate-this.log')
     f.write(content)
